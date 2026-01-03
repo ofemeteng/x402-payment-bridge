@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>x402 Payment Bridge</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f6f6f7;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      color: #202223;
+      margin-bottom: 8px;
+      font-size: 24px;
+    }
+
+    h2 {
+      color: #202223;
+      margin-bottom: 16px;
+      font-size: 18px;
+    }
+
+    .subtitle {
+      color: #6d7175;
+      margin-bottom: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: #202223;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #c9cccf;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: #005bd3;
+    }
+
+    button {
+      background: #008060;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    button:hover {
+      background: #006e52;
+    }
+
+    button:disabled {
+      background: #c9cccf;
+      cursor: not-allowed;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-enabled {
+      background: #d1f7e5;
+      color: #008060;
+    }
+
+    .status-disabled {
+      background: #ffea8a;
+      color: #916a00;
+    }
+
+    .payment-item {
+      border-top: 1px solid #e1e3e5;
+      padding: 16px 0;
+    }
+
+    .payment-item:first-child {
+      border-top: none;
+      padding-top: 0;
+    }
+
+    .payment-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .payment-title {
+      font-weight: 600;
+      color: #202223;
+    }
+
+    .payment-detail {
+      font-size: 13px;
+      color: #6d7175;
+      margin: 4px 0;
+    }
+
+    .code {
+      background: #f6f6f7;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .alert-success {
+      background: #d1f7e5;
+      color: #008060;
+    }
+
+    .alert-error {
+      background: #fed3d1;
+      color: #d72c0d;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #c9cccf;
+      border-top-color: #008060;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>x402 Payment Bridge</h1>
+      <p class="subtitle">Accept agentic payments on your Shopify store using the x402 v2 protocol</p>
+
+      <div id="statusBadge"></div>
+      <!-- Add this right after <div id="statusBadge"></div> -->
+      <!-- <div
+        style="margin-top: 20px; padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px;">
+        <h3 style="color: white; margin-bottom: 8px; font-size: 16px;">🛍️ Customer Checkout Demo</h3>
+        <p style="color: rgba(255,255,255,0.9); font-size: 13px; margin-bottom: 12px;">
+          Try the x402 payment flow as a customer
+        </p>
+        <a href="/checkout-demo.html?shop=${shop}"
+          style="display: inline-block; background: white; color: #667eea; padding: 10px 20px; border-radius: 4px; text-decoration: none; font-weight: 600; font-size: 14px;">
+          Launch Checkout Demo →
+        </a>
+      </div> -->
+
+      <form id="configForm">
+        <div class="form-group">
+          <label>Merchant Wallet Address</label>
+          <input type="text" id="walletAddress" placeholder="0x..." required>
+        </div>
+
+        <div class="form-group">
+          <label>Accepted Token Contract</label>
+          <input type="text" id="acceptedToken" placeholder="0x... (e.g., USDC, USDT)" required>
+        </div>
+
+        <div class="form-group">
+          <label>Network</label>
+          <select id="acceptedNetwork" required>
+            <option value="">Select network</option>
+            <option value="ethereum">Ethereum</option>
+            <option value="polygon">Polygon</option>
+            <option value="arbitrum">Arbitrum</option>
+            <option value="optimism">Optimism</option>
+            <option value="base">Base</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="isX402Enabled"> Enable x402 payments
+          </label>
+        </div>
+
+        <button type="submit">Save Configuration</button>
+      </form>
+
+      <div id="message"></div>
+    </div>
+
+    <div class="card">
+      <h2>Recent Payments</h2>
+      <div id="paymentsList">
+        <p style="color: #6d7175; text-align: center;">No payments yet</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const shop = urlParams.get('shop');
+
+    if (!shop) {
+      document.body.innerHTML = '<div class="container"><div class="card"><div class="alert alert-error">Missing shop parameter</div></div></div>';
+    }
+
+    // Load configuration
+    async function loadConfig() {
+      try {
+        const response = await fetch(`/api/config?shop=${shop}`);
+        const data = await response.json();
+
+        if (data.walletAddress) document.getElementById('walletAddress').value = data.walletAddress;
+        if (data.acceptedToken) document.getElementById('acceptedToken').value = data.acceptedToken;
+        if (data.acceptedNetwork) document.getElementById('acceptedNetwork').value = data.acceptedNetwork;
+        document.getElementById('isX402Enabled').checked = data.isX402Enabled;
+
+        updateStatusBadge(data.isX402Enabled);
+      } catch (error) {
+        console.error('Failed to load config:', error);
+      }
+    }
+
+    // Update status badge
+    function updateStatusBadge(enabled) {
+      const badge = document.getElementById('statusBadge');
+      badge.innerHTML = `<span class="status-badge ${enabled ? 'status-enabled' : 'status-disabled'}">
+        ${enabled ? '✓ x402 Enabled' : '○ x402 Disabled'}
+      </span>`;
+    }
+
+    // Save configuration
+    document.getElementById('configForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const messageDiv = document.getElementById('message');
+      messageDiv.innerHTML = '<div class="loading"></div>';
+
+      try {
+        const response = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shop,
+            walletAddress: document.getElementById('walletAddress').value,
+            acceptedToken: document.getElementById('acceptedToken').value,
+            acceptedNetwork: document.getElementById('acceptedNetwork').value,
+            isX402Enabled: document.getElementById('isX402Enabled').checked,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          messageDiv.innerHTML = '<div class="alert alert-success">Configuration saved successfully!</div>';
+          updateStatusBadge(data.config.isX402Enabled);
+          setTimeout(() => { messageDiv.innerHTML = ''; }, 3000);
+        } else {
+          throw new Error(data.error || 'Save failed');
+        }
+      } catch (error) {
+        messageDiv.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
+      }
+    });
+
+    // Load payments
+    async function loadPayments() {
+      try {
+        const response = await fetch(`/api/payments?shop=${shop}`);
+        const data = await response.json();
+
+        const paymentsDiv = document.getElementById('paymentsList');
+
+        if (data.payments && data.payments.length > 0) {
+          paymentsDiv.innerHTML = data.payments.map(payment => `
+            <div class="payment-item">
+              <div class="payment-header">
+                <div class="payment-title">${payment.productTitle}</div>
+                <span class="status-badge ${payment.status === 'completed' ? 'status-enabled' : 'status-disabled'}">
+                  ${payment.status}
+                </span>
+              </div>
+              <div class="payment-detail">Amount: <span class="code">${payment.amount}</span></div>
+              <div class="payment-detail">From: <span class="code">${payment.fromAddress.slice(0, 10)}...${payment.fromAddress.slice(-8)}</span></div>
+              <div class="payment-detail">Tx: <span class="code">${payment.txHash.slice(0, 10)}...${payment.txHash.slice(-8)}</span></div>
+              <div class="payment-detail">Verified via x402 v2 Facilitator: ${payment.facilitatorStatus}</div>
+            </div>
+          `).join('');
+        }
+      } catch (error) {
+        console.error('Failed to load payments:', error);
+      }
+    }
+
+    // Initialize
+    loadConfig();
+    loadPayments();
+    setInterval(loadPayments, 10000); // Refresh every 10 seconds
+  </script>
+</body>
+
+</html>

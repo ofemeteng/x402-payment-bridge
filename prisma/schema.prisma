@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Shop {
+  id                String    @id @default(uuid())
+  shopDomain        String    @unique
+  accessToken       String
+  scope             String?
+  
+  // x402 Configuration
+  walletAddress     String?
+  acceptedToken     String?   // Token contract address
+  acceptedNetwork   String?   // e.g., "ethereum", "polygon"
+  isX402Enabled     Boolean   @default(false)
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  payments          Payment[]
+  
+  @@index([shopDomain])
+}
+
+model Payment {
+  id                String    @id @default(uuid())
+  
+  // Shopify Reference
+  shopId            String
+  shop              Shop      @relation(fields: [shopId], references: [id])
+  orderId           String?
+  productId         String
+  productTitle      String
+  amount            String    // In token units
+  
+  // x402 v2 Payment Data
+  txHash            String    @unique
+  fromAddress       String
+  toAddress         String
+  tokenAddress      String
+  network           String
+  
+  // x402 v2 Verification
+  facilitatorStatus String    @default("pending") // pending, verified, failed
+  verificationData  Json?
+  
+  status            String    @default("pending") // pending, completed, failed, refunded
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([shopId])
+  @@index([txHash])
+  @@index([status])
+}
