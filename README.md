@@ -6,6 +6,8 @@ Traditional e-commerce is stuck in Web2. AI agents and crypto-native users can't
 ## ✨ Our Solution
 A Shopify app that bridges Web2 commerce with Web3 payments using the x402 v2 protocol.
 
+![x402 Shopify App](./public/images/x402-shopify-admin.png)
+
 ## 🚀 Live Demo Flow
 
 ### Part 1: Merchant Onboarding (30 seconds)
@@ -35,11 +37,13 @@ A Shopify app that bridges Web2 commerce with Web3 payments using the x402 v2 pr
 3. "Complete order details with crypto payment info"
 4. "Status: Paid via x402 v2 Protocol"
 
+![x402 Shopify Storefront](./public/images/storefront.png)
+
 ## 🎨 Key Features to Highlight
 - ✅ One-click Shopify app installation
 - ✅ x402 v2 protocol compliance
 - ✅ Real product catalog integration
-- ✅ Wallet connection (MetaMask)
+- ✅ Wallet connection
 - ✅ Facilitator verification
 - ✅ Automatic Shopify order creation
 - ✅ Beautiful, intuitive UI
