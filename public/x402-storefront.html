@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pay with x402</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #008060 0%, #004c3f 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-size: 42px;
+      margin-bottom: 12px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .header p {
+      font-size: 18px;
+      opacity: 0.95;
+    }
+
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .product-card {
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      transition: transform 0.3s, box-shadow 0.3s;
+      cursor: pointer;
+    }
+
+    .product-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .product-image {
+      width: 100%;
+      height: 250px;
+      background: #f6f6f7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .product-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .product-image-placeholder {
+      font-size: 80px;
+    }
+
+    .product-info {
+      padding: 20px;
+    }
+
+    .product-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #202223;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    .product-description {
+      font-size: 14px;
+      color: #6d7175;
+      margin-bottom: 16px;
+      line-height: 1.6;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .product-price {
+      font-size: 28px;
+      font-weight: 700;
+      color: #008060;
+      margin-bottom: 16px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #008060 0%, #004c3f 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 12px rgba(0, 128, 96, 0.4);
+    }
+
+    .btn-primary:disabled {
+      background: #c9cccf;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .modal.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+      background: linear-gradient(135deg, #008060 0%, #004c3f 100%);
+      padding: 32px 24px;
+      color: white;
+      text-align: center;
+      position: relative;
+    }
+
+    .modal-header h2 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .modal-body {
+      padding: 32px 24px;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .wallet-section {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .wallet-connected {
+      background: #d1f7e5;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .wallet-address {
+      font-family: monospace;
+      font-size: 14px;
+      color: #008060;
+      word-break: break-all;
+    }
+
+    .payment-details {
+      background: #202223;
+      color: #e3e8ee;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .payment-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 14px;
+    }
+
+    .payment-row:last-child {
+      border-bottom: none;
+    }
+
+    .payment-label {
+      opacity: 0.7;
+    }
+
+    .payment-value {
+      font-family: monospace;
+      font-weight: 600;
+    }
+
+    .success-screen {
+      text-align: center;
+      padding: 20px;
+    }
+
+    .success-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      background: #d1f7e5;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      color: #008060;
+    }
+
+    .order-summary {
+      background: #f6f6f7;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      text-align: left;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #e1e3e5;
+    }
+
+    .summary-row:last-child {
+      border-bottom: none;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: white;
+    }
+
+    .empty-state h2 {
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+
+    .error-message {
+      background: #fed3d1;
+      color: #d72c0d;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>💎 Pay with x402</h1>
+      <p>Secure crypto payments powered by x402 v2 protocol</p>
+    </div>
+
+    <div id="errorState" class="empty-state hidden">
+      <h2>⚠️ x402 Not Enabled</h2>
+      <p>This store hasn't enabled x402 payments yet.</p>
+    </div>
+
+    <div id="loadingState" class="empty-state">
+      <div class="loading" style="width: 40px; height: 40px; border-width: 4px;"></div>
+      <p style="margin-top: 20px;">Loading products...</p>
+    </div>
+
+    <div id="productsContainer" class="products-grid hidden"></div>
+  </div>
+
+  <!-- Payment Modal -->
+  <div id="paymentModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button class="close-btn" onclick="closeModal()">×</button>
+        <h2 id="modalTitle">Complete Payment</h2>
+        <p id="modalSubtitle">Connect wallet and pay with crypto</p>
+      </div>
+
+      <div class="modal-body">
+        <!-- Connect Wallet Screen -->
+        <div id="connectScreen">
+          <div class="wallet-section">
+            <p style="color: #6d7175; margin-bottom: 20px;">
+              Connect your wallet to continue with the purchase
+            </p>
+            <button class="btn btn-primary" onclick="connectWallet()">
+              Connect Wallet
+            </button>
+          </div>
+        </div>
+
+        <!-- Payment Screen -->
+        <div id="paymentScreen" class="hidden">
+          <div class="wallet-connected">
+            <p style="font-size: 12px; color: #008060; margin-bottom: 4px; font-weight: 600;">CONNECTED WALLET</p>
+            <div class="wallet-address" id="connectedWallet"></div>
+          </div>
+
+          <div style="text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 20px; font-weight: 600; margin-bottom: 8px;" id="payProductTitle"></div>
+            <!-- <div style="font-size: 32px; font-weight: 700; color: #667eea;" id="payProductPrice"></div> -->
+            <div style="font-size: 32px; font-weight: 700; color: #008060;" id="payProductPrice"></div>
+          </div>
+
+          <div class="payment-details">
+            <h3 style="margin-bottom: 16px; font-size: 14px; opacity: 0.7;">x402 v2 Payment Request</h3>
+            <div class="payment-row">
+              <span class="payment-label">Protocol</span>
+              <span class="payment-value">x402 v2</span>
+            </div>
+            <div class="payment-row">
+              <span class="payment-label">Recipient</span>
+              <span class="payment-value" id="payRecipient">...</span>
+            </div>
+            <div class="payment-row">
+              <span class="payment-label">Token</span>
+              <span class="payment-value" id="payToken">USDC</span>
+            </div>
+            <div class="payment-row">
+              <span class="payment-label">Amount</span>
+              <span class="payment-value" id="payAmount">...</span>
+            </div>
+            <div class="payment-row">
+              <span class="payment-label">Network</span>
+              <span class="payment-value" id="payNetwork">...</span>
+            </div>
+          </div>
+
+          <div id="paymentError" class="error-message hidden"></div>
+
+          <button class="btn btn-primary" onclick="signPayment()" id="payButton">
+            Sign Payment
+          </button>
+        </div>
+
+        <!-- Success Screen -->
+        <div id="successScreen" class="hidden">
+          <div class="success-screen">
+            <div class="success-icon">✓</div>
+            <h2 style="margin-bottom: 12px; color: #202223;">Payment Successful!</h2>
+            <p style="color: #6d7175; margin-bottom: 24px;">
+              Your order has been created and verified via x402 v2 protocol
+            </p>
+
+            <div class="order-summary">
+              <h3 style="margin-bottom: 16px; font-weight: 600;">Order Details</h3>
+              <div class="summary-row">
+                <span>Order ID</span>
+                <span id="successOrderId" style="font-family: monospace; font-size: 14px;">...</span>
+              </div>
+              <div class="summary-row">
+                <span>Order Number</span>
+                <span id="successOrderNumber">...</span>
+              </div>
+              <div class="summary-row">
+                <span>Product</span>
+                <span id="successProduct">...</span>
+              </div>
+              <div class="summary-row">
+                <span>Amount Paid</span>
+                <span id="successAmount">...</span>
+              </div>
+              <div class="summary-row">
+                <span>Transaction</span>
+                <span id="successTx" style="font-family: monospace; font-size: 12px;">...</span>
+              </div>
+              <div class="summary-row">
+                <span>Payment Status</span>
+                <span style="color: #008060;">✓ Verified & Complete</span>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="closeModal()">
+              Continue Shopping
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+
+    let products = [];
+    let shopConfig = null;
+    let selectedProduct = null;
+    let paymentRequest = null;
+    let walletAddress = null;
+
+    // Determine the correct API base path
+    const isProxied = window.location.hostname.includes('myshopify.com');
+    const apiBasePath = isProxied ? '/apps/x402-checkout' : '/shopify-proxy';
+
+    console.log('Running in proxied mode:', isProxied);
+    console.log('API base path:', apiBasePath);
+
+    // Initialize
+    async function init() {
+      let shopFromUrl = urlParams.get('shop');
+
+      if (!shopFromUrl) {
+        const hostname = window.location.hostname;
+        if (hostname.includes('myshopify.com')) {
+          shopFromUrl = hostname;
+        }
+      }
+
+      if (!shopFromUrl) {
+        showError('Invalid shop parameter');
+        return;
+      }
+
+      console.log('Initializing for shop:', shopFromUrl);
+
+      try {
+        console.log('Fetching config from:', `${apiBasePath}/api/config?shop=${encodeURIComponent(shopFromUrl)}`);
+        const configResponse = await fetch(`${apiBasePath}/api/config?shop=${encodeURIComponent(shopFromUrl)}`);
+
+        console.log('Config response status:', configResponse.status);
+        const configText = await configResponse.text();
+        console.log('Config response:', configText.substring(0, 200));
+
+        let configData;
+        try {
+          configData = JSON.parse(configText);
+        } catch (e) {
+          console.error('Failed to parse config JSON:', e);
+          throw new Error('Server returned invalid response. Please check if x402 is configured.');
+        }
+
+        if (!configData.success || !configData.enabled) {
+          showError(configData.error || 'x402 payments not enabled for this store');
+          return;
+        }
+
+        shopConfig = configData.config;
+        console.log('Config loaded successfully');
+
+        console.log('Fetching products from:', `${apiBasePath}/api/products?shop=${encodeURIComponent(shopFromUrl)}`);
+        const productsResponse = await fetch(`${apiBasePath}/api/products?shop=${encodeURIComponent(shopFromUrl)}`);
+
+        console.log('Products response status:', productsResponse.status);
+        const productsText = await productsResponse.text();
+        console.log('Products response:', productsText.substring(0, 500));
+
+        let productsData;
+        try {
+          productsData = JSON.parse(productsText);
+        } catch (e) {
+          console.error('Failed to parse products JSON:', e);
+          console.error('Response was:', productsText);
+          throw new Error('Failed to load products. Please try again.');
+        }
+
+        if (!productsData.success) {
+          throw new Error(productsData.error || 'Failed to load products');
+        }
+
+        products = productsData.products;
+        console.log('Loaded products:', products.length);
+        displayProducts();
+
+      } catch (error) {
+        console.error('Initialization error:', error);
+        showError(error.message);
+      }
+    }
+
+    function showError(message) {
+      document.getElementById('loadingState').classList.add('hidden');
+      document.getElementById('errorState').classList.remove('hidden');
+      document.getElementById('errorState').querySelector('p').textContent = message;
+    }
+
+    function displayProducts() {
+      document.getElementById('loadingState').classList.add('hidden');
+      document.getElementById('productsContainer').classList.remove('hidden');
+
+      const container = document.getElementById('productsContainer');
+
+      if (products.length === 0) {
+        container.innerHTML = '<div class="empty-state"><h2>No products available</h2><p>Please add products to your Shopify store</p></div>';
+        return;
+      }
+
+      container.innerHTML = products.map(product => `
+        <div class="product-card" onclick="selectProduct('${product.id}')">
+          <div class="product-image">
+            ${product.image
+          ? `<img src="${product.image}" alt="${product.title}">`
+          : `<div class="product-image-placeholder">🎁</div>`
+        }
+          </div>
+          <div class="product-info">
+            <div class="product-title">${product.title}</div>
+            ${product.description ? `<div class="product-description">${product.description}</div>` : ''}
+            <div class="product-price">$${product.price}</div>
+            <button class="btn btn-primary" onclick="selectProduct('${product.id}'); event.stopPropagation();">
+              Buy with x402
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function selectProduct(productId) {
+      selectedProduct = products.find(p => p.id === productId);
+      if (!selectedProduct) return;
+
+      const apiShop = urlParams.get('shop') || window.location.hostname;
+
+      try {
+        const usdPrice = parseFloat(selectedProduct.price);
+        const cryptoAmount = Math.floor(usdPrice * 1000000).toString();
+
+        const response = await fetch(`${apiBasePath}/api/payment/request?shop=${encodeURIComponent(apiShop)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId: selectedProduct.id,
+            productTitle: selectedProduct.title,
+            amount: cryptoAmount,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to generate payment request');
+        }
+
+        paymentRequest = await response.json();
+
+        document.getElementById('payProductTitle').textContent = selectedProduct.title;
+        document.getElementById('payProductPrice').textContent = `$${selectedProduct.price}`;
+
+        document.getElementById('payRecipient').textContent =
+          paymentRequest.recipient.slice(0, 10) + '...' + paymentRequest.recipient.slice(-8);
+        document.getElementById('payAmount').textContent = `${usdPrice} USDC`;
+        document.getElementById('payNetwork').textContent = paymentRequest.network;
+
+        document.getElementById('paymentModal').classList.add('show');
+
+        if (walletAddress) {
+          showPaymentScreen();
+        }
+
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    async function connectWallet() {
+      if (typeof window.ethereum === 'undefined') {
+        const install = confirm('MetaMask is required to continue. Would you like to install it?');
+        if (install) {
+          window.open('https://metamask.io/download/', '_blank');
+        }
+        return;
+      }
+
+      try {
+        // Request account access
+        const accounts = await window.ethereum.request({
+          method: 'eth_requestAccounts'
+        });
+
+        walletAddress = accounts[0];
+        console.log('Wallet connected:', walletAddress);
+
+        document.getElementById('connectedWallet').textContent =
+          walletAddress.slice(0, 10) + '...' + walletAddress.slice(-8);
+
+        showPaymentScreen();
+
+      } catch (error) {
+        console.error('Wallet connection error:', error);
+        if (error.code === 4001) {
+          alert('Please approve the connection request in MetaMask');
+        } else {
+          alert('Failed to connect wallet: ' + error.message);
+        }
+      }
+    }
+
+    function showPaymentScreen() {
+      document.getElementById('connectScreen').classList.add('hidden');
+      document.getElementById('paymentScreen').classList.remove('hidden');
+    }
+
+    async function signPayment() {
+      const btn = document.getElementById('payButton');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span>Processing payment...';
+
+      const errorDiv = document.getElementById('paymentError');
+      errorDiv.classList.add('hidden');
+
+      const apiShop = urlParams.get('shop') || window.location.hostname;
+
+      try {
+        // Simulate transaction signing
+        const txHash = '0x' + Array.from({ length: 64 }, () =>
+          Math.floor(Math.random() * 16).toString(16)
+        ).join('');
+
+        console.log('Verifying payment...');
+        const response = await fetch(`${apiBasePath}/api/payment/verify?shop=${encodeURIComponent(apiShop)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            txHash,
+            fromAddress: walletAddress,
+            amount: paymentRequest.amount,
+            productId: selectedProduct.id,
+            productTitle: selectedProduct.title,
+            productPrice: selectedProduct.price,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Payment verification failed');
+        }
+
+        const result = await response.json();
+        console.log('Payment result:', result);
+
+        if (result.verified) {
+          document.getElementById('paymentScreen').classList.add('hidden');
+          document.getElementById('successScreen').classList.remove('hidden');
+
+          document.getElementById('successOrderId').textContent = result.order.orderId;
+          document.getElementById('successOrderNumber').textContent = result.order.orderName || result.order.orderNumber;
+          document.getElementById('successProduct').textContent = selectedProduct.title;
+          document.getElementById('successAmount').textContent = `$${selectedProduct.price}`;
+          document.getElementById('successTx').textContent =
+            txHash.slice(0, 10) + '...' + txHash.slice(-8);
+        } else {
+          throw new Error('Payment not verified');
+        }
+
+      } catch (error) {
+        console.error('Payment error:', error);
+        errorDiv.textContent = error.message;
+        errorDiv.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Sign Payment';
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('paymentModal').classList.remove('show');
+
+      setTimeout(() => {
+        document.getElementById('connectScreen').classList.remove('hidden');
+        document.getElementById('paymentScreen').classList.add('hidden');
+        document.getElementById('successScreen').classList.add('hidden');
+        document.getElementById('paymentError').classList.add('hidden');
+
+        const btn = document.getElementById('payButton');
+        btn.disabled = false;
+        btn.textContent = 'Sign Payment';
+      }, 300);
+    }
+
+    // Auto-connect if wallet already connected
+    window.addEventListener('load', async () => {
+      if (typeof window.ethereum !== 'undefined') {
+        try {
+          const accounts = await window.ethereum.request({
+            method: 'eth_accounts'
+          });
+
+          if (accounts.length > 0) {
+            walletAddress = accounts[0];
+            console.log('Wallet already connected:', walletAddress);
+          }
+        } catch (error) {
+          console.log('Wallet not connected:', error);
+        }
+      }
+
+      // Initialize app
+      init();
+    });
+  </script>
+</body>
+
+</html>
