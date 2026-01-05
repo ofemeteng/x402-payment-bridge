@@ -6,10 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pay with x402</title>
   <!-- x402plus client library -->
-  <script type="module">
+  <!-- <script type="module">
     import { withX402Fetch, createEvmSigner } from 'https://cdn.jsdelivr.net/npm/x402plus@latest/+esm';
     window.x402plus = { withX402Fetch, createEvmSigner };
-  </script>
+  </script> -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
     * {
@@ -474,7 +474,10 @@
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    // Import x402plus
+    import { withX402Fetch, createEvmSigner } from 'https://cdn.jsdelivr.net/npm/x402plus@latest/+esm';
+
     const urlParams = new URLSearchParams(window.location.search);
 
     let products = [];
@@ -483,14 +486,44 @@
     let paymentRequest = null;
     let walletAddress = null;
 
-    // Determine the correct API base path
     const isProxied = window.location.hostname.includes('myshopify.com');
     const apiBasePath = isProxied ? '/apps/x402-checkout' : '/shopify-proxy';
 
-    console.log('Running in proxied mode:', isProxied);
+    console.log('x402plus loaded successfully');
     console.log('API base path:', apiBasePath);
 
-    // Initialize
+    // Network configurations
+    const NETWORK_CONFIGS = {
+      'base': {
+        chainId: '0x2105',
+        chainName: 'Base',
+        nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+        rpcUrls: ['https://mainnet.base.org'],
+        blockExplorerUrls: ['https://basescan.org']
+      },
+      'base-sepolia': {
+        chainId: '0x14a34',
+        chainName: 'Base Sepolia',
+        nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+        rpcUrls: ['https://sepolia.base.org'],
+        blockExplorerUrls: ['https://sepolia.basescan.org']
+      },
+      'ethereum': {
+        chainId: '0x1',
+        chainName: 'Ethereum Mainnet',
+        nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+        rpcUrls: ['https://eth.llamarpc.com'],
+        blockExplorerUrls: ['https://etherscan.io']
+      },
+      'polygon': {
+        chainId: '0x89',
+        chainName: 'Polygon',
+        nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
+        rpcUrls: ['https://polygon-rpc.com'],
+        blockExplorerUrls: ['https://polygonscan.com']
+      },
+    };
+
     async function init() {
       let shopFromUrl = urlParams.get('shop');
 
@@ -506,47 +539,32 @@
         return;
       }
 
-      console.log('Initializing for shop:', shopFromUrl);
-
       try {
         const configResponse = await fetch(`${apiBasePath}/api/config?shop=${encodeURIComponent(shopFromUrl)}`);
-
         const configText = await configResponse.text();
-        let configData;
-        try {
-          configData = JSON.parse(configText);
-        } catch (e) {
-          throw new Error('Server returned invalid response.');
-        }
+        let configData = JSON.parse(configText);
 
         if (!configData.success || !configData.enabled) {
-          showError(configData.error || 'x402 payments not enabled for this store');
+          showError(configData.error || 'x402 payments not enabled');
           return;
         }
 
         shopConfig = configData.config;
-        console.log('Config loaded:', shopConfig);
+        console.log('Shop config loaded:', shopConfig);
 
         const productsResponse = await fetch(`${apiBasePath}/api/products?shop=${encodeURIComponent(shopFromUrl)}`);
         const productsText = await productsResponse.text();
-
-        let productsData;
-        try {
-          productsData = JSON.parse(productsText);
-        } catch (e) {
-          throw new Error('Failed to load products.');
-        }
+        let productsData = JSON.parse(productsText);
 
         if (!productsData.success) {
           throw new Error(productsData.error || 'Failed to load products');
         }
 
         products = productsData.products;
-        console.log('Loaded products:', products.length);
         displayProducts();
 
       } catch (error) {
-        console.error('Initialization error:', error);
+        console.error('Init error:', error);
         showError(error.message);
       }
     }
@@ -564,12 +582,12 @@
       const container = document.getElementById('productsContainer');
 
       if (products.length === 0) {
-        container.innerHTML = '<div class="empty-state"><h2>No products available</h2><p>Please add products to your Shopify store</p></div>';
+        container.innerHTML = '<div class="empty-state"><h2>No products available</h2></div>';
         return;
       }
 
       container.innerHTML = products.map(product => `
-        <div class="product-card" onclick="selectProduct('${product.id}')">
+        <div class="product-card" onclick="window.selectProduct('${product.id}')">
           <div class="product-image">
             ${product.image
           ? `<img src="${product.image}" alt="${product.title}">`
@@ -580,7 +598,7 @@
             <div class="product-title">${product.title}</div>
             ${product.description ? `<div class="product-description">${product.description}</div>` : ''}
             <div class="product-price">$${product.price}</div>
-            <button class="btn btn-primary" onclick="selectProduct('${product.id}'); event.stopPropagation();">
+            <button class="btn btn-primary" onclick="window.selectProduct('${product.id}'); event.stopPropagation();">
               Buy with x402
             </button>
           </div>
@@ -588,17 +606,14 @@
       `).join('');
     }
 
-    async function selectProduct(productId) {
+    // Expose functions to global scope
+    window.selectProduct = async function (productId) {
       selectedProduct = products.find(p => p.id === productId);
       if (!selectedProduct) return;
 
-      console.log('Selected product:', selectedProduct);
-
-      // Calculate crypto amount
       const usdPrice = parseFloat(selectedProduct.price);
       const cryptoAmount = Math.floor(usdPrice * 1000000).toString();
 
-      // Store payment info
       paymentRequest = {
         amount: cryptoAmount,
         productId: selectedProduct.id,
@@ -606,7 +621,6 @@
         productPrice: selectedProduct.price,
       };
 
-      // Update modal UI
       document.getElementById('payProductTitle').textContent = selectedProduct.title;
       document.getElementById('payProductPrice').textContent = `$${selectedProduct.price}`;
       document.getElementById('payAmount').textContent = `${usdPrice} USDC`;
@@ -614,31 +628,27 @@
       if (shopConfig) {
         document.getElementById('payRecipient').textContent =
           shopConfig.walletAddress.slice(0, 10) + '...' + shopConfig.walletAddress.slice(-8);
-        document.getElementById('payNetwork').textContent = shopConfig.acceptedNetwork;
+        const networkConfig = NETWORK_CONFIGS[shopConfig.acceptedNetwork];
+        document.getElementById('payNetwork').textContent = networkConfig?.chainName || shopConfig.acceptedNetwork;
         document.getElementById('payToken').textContent = 'USDC';
       }
 
-      // Show modal
       document.getElementById('paymentModal').classList.add('show');
 
-      // Check if wallet already connected
       if (walletAddress) {
         showPaymentScreen();
       }
-    }
+    };
 
-    async function connectWallet() {
+    window.connectWallet = async function () {
       if (typeof window.ethereum === 'undefined') {
-        const install = confirm('MetaMask is required. Install now?');
+        const install = confirm('MetaMask required. Install now?');
         if (install) window.open('https://metamask.io/download/', '_blank');
         return;
       }
 
       try {
-        const accounts = await window.ethereum.request({
-          method: 'eth_requestAccounts'
-        });
-
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
         walletAddress = accounts[0];
         console.log('Wallet connected:', walletAddress);
 
@@ -646,26 +656,52 @@
           walletAddress.slice(0, 10) + '...' + walletAddress.slice(-8);
 
         showPaymentScreen();
-
       } catch (error) {
-        console.error('Wallet connection error:', error);
-        if (error.code === 4001) {
-          alert('Please approve the connection in MetaMask');
-        } else {
-          alert('Failed to connect wallet: ' + error.message);
-        }
+        console.error('Wallet error:', error);
+        alert('Failed to connect wallet');
       }
-    }
+    };
 
     function showPaymentScreen() {
       document.getElementById('connectScreen').classList.add('hidden');
       document.getElementById('paymentScreen').classList.remove('hidden');
     }
 
-    async function signPayment() {
+    async function switchToCorrectNetwork() {
+      const networkConfig = NETWORK_CONFIGS[shopConfig.acceptedNetwork];
+      if (!networkConfig) throw new Error(`Network ${shopConfig.acceptedNetwork} not supported`);
+
+      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+
+      if (currentChainId.toLowerCase() === networkConfig.chainId.toLowerCase()) {
+        console.log('Already on', networkConfig.chainName);
+        return true;
+      }
+
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: networkConfig.chainId }],
+        });
+        console.log('Switched to', networkConfig.chainName);
+        return true;
+      } catch (switchError) {
+        if (switchError.code === 4902) {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [networkConfig],
+          });
+          console.log('Added and switched to', networkConfig.chainName);
+          return true;
+        }
+        throw switchError;
+      }
+    }
+
+    window.signPayment = async function () {
       const btn = document.getElementById('payButton');
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span>Processing payment...';
+      btn.innerHTML = '<span class="loading"></span>Switching network...';
 
       const errorDiv = document.getElementById('paymentError');
       errorDiv.classList.add('hidden');
@@ -673,25 +709,30 @@
       const apiShop = urlParams.get('shop') || window.location.hostname;
 
       try {
-        // Check if x402plus loaded
-        if (!window.x402plus) {
-          throw new Error('x402plus library not loaded. Please refresh.');
-        }
+        // Step 1: Switch network
+        await switchToCorrectNetwork();
 
-        const { withX402Fetch, createEvmSigner } = window.x402plus;
+        btn.innerHTML = '<span class="loading"></span>Preparing payment...';
+        console.log('Creating EVM signer for REAL transaction...');
 
-        // Create EVM signer
+        // Step 2: Create REAL EVM signer
         const signer = createEvmSigner(window.ethereum);
+        console.log('EVM signer created');
 
-        // Wrap fetch with x402plus
+        // Step 3: Wrap fetch with x402plus
         const x402Fetch = withX402Fetch(fetch, {
           signer,
-          prefer: 'exact',
+          prefer: 'exact', // Use exact scheme for EVM
         });
 
-        console.log('Making payment with x402plus...');
+        btn.innerHTML = '<span class="loading"></span>Please sign in MetaMask...';
+        console.log('Making REAL payment with x402plus...');
+        console.log('Network:', shopConfig.acceptedNetwork);
+        console.log('Token:', shopConfig.acceptedToken);
+        console.log('Amount:', paymentRequest.amount);
 
-        // x402plus handles everything automatically
+        // Step 4: x402plus will submit transaction ON-CHAIN
+
         const response = await x402Fetch(`${apiBasePath}/api/checkout?shop=${encodeURIComponent(apiShop)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -703,13 +744,16 @@
           }),
         });
 
+        console.log('Response status:', response.status);
+
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.error || 'Payment failed');
+          console.error('Payment failed:', error);
+          throw new Error(error.error || error.details || 'Payment failed');
         }
 
         const result = await response.json();
-        console.log('Payment successful:', result);
+        console.log('Payment successful!', result);
 
         // Show success
         document.getElementById('paymentScreen').classList.add('hidden');
@@ -719,7 +763,8 @@
         document.getElementById('successOrderNumber').textContent = result.order.orderName || result.order.orderNumber;
         document.getElementById('successProduct').textContent = selectedProduct.title;
         document.getElementById('successAmount').textContent = `$${selectedProduct.price}`;
-        document.getElementById('successTx').textContent = result.paymentId;
+        document.getElementById('successTx').textContent =
+          (result.transaction?.hash || result.paymentId || 'verified').slice(0, 16) + '...';
 
       } catch (error) {
         console.error('Payment error:', error);
@@ -728,9 +773,9 @@
         btn.disabled = false;
         btn.textContent = 'Sign Payment';
       }
-    }
+    };
 
-    function closeModal() {
+    window.closeModal = function () {
       document.getElementById('paymentModal').classList.remove('show');
 
       setTimeout(() => {
@@ -743,26 +788,21 @@
         btn.disabled = false;
         btn.textContent = 'Sign Payment';
       }, 300);
-    }
+    };
 
-    // Auto-connect wallet
+    // Auto-connect and init
     window.addEventListener('load', async () => {
       if (typeof window.ethereum !== 'undefined') {
         try {
-          const accounts = await window.ethereum.request({
-            method: 'eth_accounts'
-          });
-
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
           if (accounts.length > 0) {
             walletAddress = accounts[0];
             console.log('Wallet already connected:', walletAddress);
           }
         } catch (error) {
-          console.log('Wallet not connected:', error);
+          console.log('Wallet not connected');
         }
       }
-
-      // Initialize app
       init();
     });
   </script>
