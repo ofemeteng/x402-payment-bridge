@@ -3,9 +3,10 @@ dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
+import { x402Paywall } from 'x402plus';
 import shopify from './config/shopify';
 import prisma from './config/database';
-import x402Service from './services/x402Service';
+// import x402Service from './services/x402Service';
 import shopifyOrderService from './services/shopifyOrderService';
 
 
@@ -149,155 +150,59 @@ app.post('/api/config', async (req, res) => {
 
 
 // ============================================
-// SHOPIFY APP PROXY ROUTES
+// SHOPIFY APP PROXY ROUTES (x402plus ONLY)
 // ============================================
 
-// Helper function to extract shop from Shopify proxy request
 function getShopFromProxy(req: any): string | null {
-  // Shopify sends shop in the query string with the key 'shop'
-  // But it's in the format: ?shop=testnow-4.myshopify.com&other_params
-
-  // First try query parameter
-  if (req.query.shop) {
-    return req.query.shop as string;
-  }
-
-  // Try path_prefix which Shopify includes
-  if (req.query.path_prefix) {
-    // Extract shop from path like /apps/x402-checkout
-    // We need to get it from the request itself
-    const shopifyShop = req.headers['x-shopify-shop-domain'];
-    if (shopifyShop) {
-      return shopifyShop as string;
-    }
-  }
-
-  // Check if it's in the logged_in_customer_id format
-  const timestamp = req.query.timestamp;
-  if (timestamp) {
-    // This is a Shopify proxy request
-    // Extract from signature verification
-    const shopDomain = req.query.shop || req.headers['x-shopify-shop-domain'];
-    return shopDomain as string;
-  }
-
-  return null;
+  return req.query.shop as string || req.headers['x-shopify-shop-domain'] as string || null;
 }
 
-
-// ============================================
-// SHOPIFY APP PROXY ROUTES
-// ============================================
-
-
-/// IMPORTANT: API routes MUST come before the HTML route
-
-// Proxy API - Get shop config
+// Config and products routes (no x402 needed)
 app.get('/shopify-proxy/api/config', async (req, res) => {
   const shop = req.query.shop as string || getShopFromProxy(req);
-
-  console.log('Config request for shop:', shop);
-  console.log('Query params:', req.query);
-  console.log('Headers:', req.headers['x-shopify-shop-domain']);
-
-  if (!shop) {
-    console.error('No shop parameter found');
-    return res.status(400).json({ error: 'Missing shop parameter' });
-  }
+  if (!shop) return res.status(400).json({ error: 'Missing shop parameter' });
 
   try {
     const shopData = await prisma.shop.findUnique({
       where: { shopDomain: shop },
-      select: {
-        walletAddress: true,
-        acceptedToken: true,
-        acceptedNetwork: true,
-        isX402Enabled: true,
-      },
+      select: { walletAddress: true, acceptedToken: true, acceptedNetwork: true, isX402Enabled: true },
     });
 
     if (!shopData) {
-      console.error('Shop not found in database:', shop);
-      return res.status(404).json({
-        error: 'Shop not found. Please install and configure the app first.',
-        success: false,
-        enabled: false
-      });
+      return res.status(404).json({ error: 'Shop not found', success: false, enabled: false });
     }
 
     if (!shopData.isX402Enabled) {
-      console.log('x402 not enabled for shop:', shop);
-      return res.status(400).json({
-        error: 'x402 payments not enabled. Please enable in app settings.',
-        success: false,
-        enabled: false
-      });
+      return res.status(400).json({ error: 'x402 not enabled', success: false, enabled: false });
     }
 
-    console.log('Config found for shop:', shop);
-    res.json({
-      success: true,
-      enabled: true,
-      config: shopData,
-    });
+    res.json({ success: true, enabled: true, config: shopData });
   } catch (error: any) {
-    console.error('Proxy config error:', error);
-    res.status(500).json({
-      error: error.message,
-      success: false,
-      enabled: false
-    });
+    res.status(500).json({ error: error.message, success: false, enabled: false });
   }
 });
 
-// Proxy API - Get products
 app.get('/shopify-proxy/api/products', async (req, res) => {
   const shop = req.query.shop as string || getShopFromProxy(req);
-
-  console.log('Products request for shop:', shop);
-
-  if (!shop) {
-    return res.status(400).json({ error: 'Missing shop parameter', success: false });
-  }
+  if (!shop) return res.status(400).json({ error: 'Missing shop parameter' });
 
   try {
     const products = await shopifyOrderService.fetchProducts(shop);
-    console.log(`Found ${products.length} products for shop:`, shop);
     res.json({ success: true, products });
   } catch (error: any) {
-    console.error('Proxy products error:', error);
     res.status(500).json({ error: error.message, success: false });
   }
 });
 
-// Proxy API - Get single product
-app.get('/shopify-proxy/api/products/:productId', async (req, res) => {
+// x402plus-protected checkout route
+app.use(async (req, res, next) => {
+  // Only apply x402 to checkout endpoint
+  if (!req.path.includes('/shopify-proxy/api/checkout')) {
+    return next();
+  }
+
   const shop = req.query.shop as string || getShopFromProxy(req);
-  const { productId } = req.params;
-
-  if (!shop) {
-    return res.status(400).json({ error: 'Missing shop parameter', success: false });
-  }
-
-  try {
-    const product = await shopifyOrderService.getProduct(shop, productId);
-    res.json({ success: true, product });
-  } catch (error: any) {
-    console.error('Proxy product error:', error);
-    res.status(500).json({ error: error.message, success: false });
-  }
-});
-
-// Proxy API - Create payment request
-app.post('/shopify-proxy/api/payment/request', async (req, res) => {
-  const shop = req.query.shop as string || getShopFromProxy(req);
-  const { productId, productTitle, amount } = req.body;
-
-  console.log('Payment request for shop:', shop);
-
-  if (!shop || !productId || !amount) {
-    return res.status(400).json({ error: 'Missing required parameters' });
-  }
+  if (!shop) return res.status(400).json({ error: 'Missing shop parameter' });
 
   try {
     const shopData = await prisma.shop.findUnique({
@@ -305,42 +210,50 @@ app.post('/shopify-proxy/api/payment/request', async (req, res) => {
     });
 
     if (!shopData || !shopData.isX402Enabled) {
-      return res.status(400).json({ error: 'x402 payments not enabled' });
+      return res.status(400).json({ error: 'x402 not enabled' });
     }
 
-    const paymentRequest = x402Service.generatePaymentRequest(
+    // Get product details from request body
+    const { amount, productId, productTitle } = req.body;
+
+    // Create x402plus middleware dynamically per shop
+    const x402Middleware = x402Paywall(
       shopData.walletAddress!,
-      shopData.acceptedToken!,
-      amount,
-      shopData.acceptedNetwork!,
-      productId,
-      productTitle
+      {
+        'POST /shopify-proxy/api/checkout': {
+          network: shopData.acceptedNetwork!,
+          asset: shopData.acceptedToken!,
+          maxAmountRequired: amount || '1000000',
+          description: `Purchase: ${productTitle || 'Product'}`,
+          mimeType: 'application/json',
+          maxTimeoutSeconds: 600,
+          extra: { 
+            name: 'USDC', 
+            version: '2',
+            productId,
+            productTitle,
+          },
+        },
+      },
+      {
+        url: process.env.FACILITATOR_URL || 'https://facilitator.stableyard.fi',
+      }
     );
 
-    res.json(paymentRequest);
+    // x402plus handles everything: 402 response OR verification OR calling next()
+    x402Middleware(req, res, next);
   } catch (error: any) {
-    console.error('Proxy payment request error:', error);
+    console.error('x402 setup error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Proxy API - Verify payment and create order
-app.post('/shopify-proxy/api/payment/verify', async (req, res) => {
+// This handler ONLY runs if x402plus verification succeeds
+app.post('/shopify-proxy/api/checkout', async (req, res) => {
   const shop = req.query.shop as string || getShopFromProxy(req);
-  const {
-    txHash,
-    fromAddress,
-    amount,
-    productId,
-    productTitle,
-    productPrice
-  } = req.body;
+  const { productId, productTitle, productPrice, amount } = req.body;
 
-  console.log('Payment verification for shop:', shop);
-
-  if (!shop || !txHash || !fromAddress || !amount) {
-    return res.status(400).json({ error: 'Missing required parameters' });
-  }
+  console.log('Payment verified by x402plus! Creating order...');
 
   try {
     const shopData = await prisma.shop.findUnique({
@@ -351,21 +264,20 @@ app.post('/shopify-proxy/api/payment/verify', async (req, res) => {
       return res.status(404).json({ error: 'Shop not found' });
     }
 
-    // Verify payment using x402 v2 facilitator
-    const verification = await x402Service.verifyPayment({
-      txHash,
-      network: shopData.acceptedNetwork!,
-      fromAddress,
-      toAddress: shopData.walletAddress!,
-      tokenAddress: shopData.acceptedToken!,
-      amount,
-    });
+    // x402plus has already verified payment
+    // Extract payment info from X-PAYMENT-RESPONSE header (set by x402plus)
+    const xPaymentResponse = res.getHeader('X-PAYMENT-RESPONSE') as string;
+    let txHash = 'verified-by-x402plus';
+    let fromAddress = 'verified-wallet';
 
-    if (!verification.verified) {
-      return res.status(400).json({
-        error: 'Payment verification failed',
-        verified: false
-      });
+    if (xPaymentResponse) {
+      try {
+        const paymentData = JSON.parse(xPaymentResponse);
+        txHash = paymentData.txHash || txHash;
+        fromAddress = paymentData.from || fromAddress;
+      } catch (e) {
+        console.log('Could not parse X-PAYMENT-RESPONSE');
+      }
     }
 
     // Store payment record
@@ -381,7 +293,7 @@ app.post('/shopify-proxy/api/payment/verify', async (req, res) => {
         tokenAddress: shopData.acceptedToken!,
         network: shopData.acceptedNetwork!,
         facilitatorStatus: 'verified',
-        verificationData: verification as any,
+        verificationData: { verified: true, facilitator: 'x402plus' } as any,
         status: 'completed',
       },
     });
@@ -398,33 +310,19 @@ app.post('/shopify-proxy/api/payment/verify', async (req, res) => {
     });
 
     res.json({
+      success: true,
       verified: true,
       paymentId: payment.id,
       order: order,
-      transaction: verification.transaction,
     });
   } catch (error: any) {
-    console.error('Proxy payment verification error:', error);
+    console.error('Order creation error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Main proxy handler - serves the x402 checkout page
-// THIS MUST BE LAST - it's a catch-all route
+// HTML page
 app.get('/shopify-proxy', async (req, res) => {
-  console.log('Proxy HTML request received');
-  console.log('Query:', req.query);
-  console.log('Headers:', req.headers['x-shopify-shop-domain']);
-
-  const shop = req.query.shop as string || getShopFromProxy(req);
-
-  if (!shop) {
-    console.error('No shop found in proxy HTML request');
-  } else {
-    console.log('Serving storefront HTML for shop:', shop);
-  }
-
-  // Serve the x402 checkout page
   res.sendFile('x402-storefront.html', { root: './public' });
 });
 

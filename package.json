@@ -22,7 +22,8 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "node-fetch": "^2.7.0",
-    "prisma": "^6.19.1"
+    "prisma": "^6.19.1",
+    "x402plus": "^0.1.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

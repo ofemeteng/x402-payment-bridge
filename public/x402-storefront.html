@@ -5,6 +5,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pay with x402</title>
+  <!-- x402plus client library -->
+  <script type="module">
+    import { withX402Fetch, createEvmSigner } from 'https://cdn.jsdelivr.net/npm/x402plus@latest/+esm';
+    window.x402plus = { withX402Fetch, createEvmSigner };
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
     * {
@@ -504,19 +509,14 @@
       console.log('Initializing for shop:', shopFromUrl);
 
       try {
-        console.log('Fetching config from:', `${apiBasePath}/api/config?shop=${encodeURIComponent(shopFromUrl)}`);
         const configResponse = await fetch(`${apiBasePath}/api/config?shop=${encodeURIComponent(shopFromUrl)}`);
 
-        console.log('Config response status:', configResponse.status);
         const configText = await configResponse.text();
-        console.log('Config response:', configText.substring(0, 200));
-
         let configData;
         try {
           configData = JSON.parse(configText);
         } catch (e) {
-          console.error('Failed to parse config JSON:', e);
-          throw new Error('Server returned invalid response. Please check if x402 is configured.');
+          throw new Error('Server returned invalid response.');
         }
 
         if (!configData.success || !configData.enabled) {
@@ -525,22 +525,16 @@
         }
 
         shopConfig = configData.config;
-        console.log('Config loaded successfully');
+        console.log('Config loaded:', shopConfig);
 
-        console.log('Fetching products from:', `${apiBasePath}/api/products?shop=${encodeURIComponent(shopFromUrl)}`);
         const productsResponse = await fetch(`${apiBasePath}/api/products?shop=${encodeURIComponent(shopFromUrl)}`);
-
-        console.log('Products response status:', productsResponse.status);
         const productsText = await productsResponse.text();
-        console.log('Products response:', productsText.substring(0, 500));
 
         let productsData;
         try {
           productsData = JSON.parse(productsText);
         } catch (e) {
-          console.error('Failed to parse products JSON:', e);
-          console.error('Response was:', productsText);
-          throw new Error('Failed to load products. Please try again.');
+          throw new Error('Failed to load products.');
         }
 
         if (!productsData.success) {
@@ -598,59 +592,49 @@
       selectedProduct = products.find(p => p.id === productId);
       if (!selectedProduct) return;
 
-      const apiShop = urlParams.get('shop') || window.location.hostname;
+      console.log('Selected product:', selectedProduct);
 
-      try {
-        const usdPrice = parseFloat(selectedProduct.price);
-        const cryptoAmount = Math.floor(usdPrice * 1000000).toString();
+      // Calculate crypto amount
+      const usdPrice = parseFloat(selectedProduct.price);
+      const cryptoAmount = Math.floor(usdPrice * 1000000).toString();
 
-        const response = await fetch(`${apiBasePath}/api/payment/request?shop=${encodeURIComponent(apiShop)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            productId: selectedProduct.id,
-            productTitle: selectedProduct.title,
-            amount: cryptoAmount,
-          }),
-        });
+      // Store payment info
+      paymentRequest = {
+        amount: cryptoAmount,
+        productId: selectedProduct.id,
+        productTitle: selectedProduct.title,
+        productPrice: selectedProduct.price,
+      };
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to generate payment request');
-        }
+      // Update modal UI
+      document.getElementById('payProductTitle').textContent = selectedProduct.title;
+      document.getElementById('payProductPrice').textContent = `$${selectedProduct.price}`;
+      document.getElementById('payAmount').textContent = `${usdPrice} USDC`;
 
-        paymentRequest = await response.json();
-
-        document.getElementById('payProductTitle').textContent = selectedProduct.title;
-        document.getElementById('payProductPrice').textContent = `$${selectedProduct.price}`;
-
+      if (shopConfig) {
         document.getElementById('payRecipient').textContent =
-          paymentRequest.recipient.slice(0, 10) + '...' + paymentRequest.recipient.slice(-8);
-        document.getElementById('payAmount').textContent = `${usdPrice} USDC`;
-        document.getElementById('payNetwork').textContent = paymentRequest.network;
+          shopConfig.walletAddress.slice(0, 10) + '...' + shopConfig.walletAddress.slice(-8);
+        document.getElementById('payNetwork').textContent = shopConfig.acceptedNetwork;
+        document.getElementById('payToken').textContent = 'USDC';
+      }
 
-        document.getElementById('paymentModal').classList.add('show');
+      // Show modal
+      document.getElementById('paymentModal').classList.add('show');
 
-        if (walletAddress) {
-          showPaymentScreen();
-        }
-
-      } catch (error) {
-        alert('Error: ' + error.message);
+      // Check if wallet already connected
+      if (walletAddress) {
+        showPaymentScreen();
       }
     }
 
     async function connectWallet() {
       if (typeof window.ethereum === 'undefined') {
-        const install = confirm('MetaMask is required to continue. Would you like to install it?');
-        if (install) {
-          window.open('https://metamask.io/download/', '_blank');
-        }
+        const install = confirm('MetaMask is required. Install now?');
+        if (install) window.open('https://metamask.io/download/', '_blank');
         return;
       }
 
       try {
-        // Request account access
         const accounts = await window.ethereum.request({
           method: 'eth_requestAccounts'
         });
@@ -666,7 +650,7 @@
       } catch (error) {
         console.error('Wallet connection error:', error);
         if (error.code === 4001) {
-          alert('Please approve the connection request in MetaMask');
+          alert('Please approve the connection in MetaMask');
         } else {
           alert('Failed to connect wallet: ' + error.message);
         }
@@ -689,46 +673,53 @@
       const apiShop = urlParams.get('shop') || window.location.hostname;
 
       try {
-        // Simulate transaction signing
-        const txHash = '0x' + Array.from({ length: 64 }, () =>
-          Math.floor(Math.random() * 16).toString(16)
-        ).join('');
+        // Check if x402plus loaded
+        if (!window.x402plus) {
+          throw new Error('x402plus library not loaded. Please refresh.');
+        }
 
-        console.log('Verifying payment...');
-        const response = await fetch(`${apiBasePath}/api/payment/verify?shop=${encodeURIComponent(apiShop)}`, {
+        const { withX402Fetch, createEvmSigner } = window.x402plus;
+
+        // Create EVM signer
+        const signer = createEvmSigner(window.ethereum);
+
+        // Wrap fetch with x402plus
+        const x402Fetch = withX402Fetch(fetch, {
+          signer,
+          prefer: 'exact',
+        });
+
+        console.log('Making payment with x402plus...');
+
+        // x402plus handles everything automatically
+        const response = await x402Fetch(`${apiBasePath}/api/checkout?shop=${encodeURIComponent(apiShop)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            txHash,
-            fromAddress: walletAddress,
-            amount: paymentRequest.amount,
             productId: selectedProduct.id,
             productTitle: selectedProduct.title,
             productPrice: selectedProduct.price,
+            amount: paymentRequest.amount,
           }),
         });
 
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.error || 'Payment verification failed');
+          throw new Error(error.error || 'Payment failed');
         }
 
         const result = await response.json();
-        console.log('Payment result:', result);
+        console.log('Payment successful:', result);
 
-        if (result.verified) {
-          document.getElementById('paymentScreen').classList.add('hidden');
-          document.getElementById('successScreen').classList.remove('hidden');
+        // Show success
+        document.getElementById('paymentScreen').classList.add('hidden');
+        document.getElementById('successScreen').classList.remove('hidden');
 
-          document.getElementById('successOrderId').textContent = result.order.orderId;
-          document.getElementById('successOrderNumber').textContent = result.order.orderName || result.order.orderNumber;
-          document.getElementById('successProduct').textContent = selectedProduct.title;
-          document.getElementById('successAmount').textContent = `$${selectedProduct.price}`;
-          document.getElementById('successTx').textContent =
-            txHash.slice(0, 10) + '...' + txHash.slice(-8);
-        } else {
-          throw new Error('Payment not verified');
-        }
+        document.getElementById('successOrderId').textContent = result.order.orderId;
+        document.getElementById('successOrderNumber').textContent = result.order.orderName || result.order.orderNumber;
+        document.getElementById('successProduct').textContent = selectedProduct.title;
+        document.getElementById('successAmount').textContent = `$${selectedProduct.price}`;
+        document.getElementById('successTx').textContent = result.paymentId;
 
       } catch (error) {
         console.error('Payment error:', error);
@@ -754,7 +745,7 @@
       }, 300);
     }
 
-    // Auto-connect if wallet already connected
+    // Auto-connect wallet
     window.addEventListener('load', async () => {
       if (typeof window.ethereum !== 'undefined') {
         try {
