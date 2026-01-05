@@ -4,7 +4,7 @@
 Traditional e-commerce is stuck in Web2. AI agents and crypto-native users can't seamlessly purchase products from Shopify stores.
 
 ## ✨ Our Solution
-A Shopify app that bridges Web2 commerce with Web3 payments using the x402 v2 protocol
+A Shopify app that bridges Web2 commerce with Web3 payments using the x402 v2 protocol.
 
 ![x402 Shopify App](./public/images/x402-shopify-admin.png)
 
