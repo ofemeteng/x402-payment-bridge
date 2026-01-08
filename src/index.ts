@@ -13,7 +13,11 @@ import shopifyOrderService from './services/shopifyOrderService';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// app.use(cors());
+app.use(cors({
+  origin: "https://nonintelligently-unaccounted-january.ngrok-free.dev",
+  exposedHeaders: ["X-PAYMENT"]
+}));
 app.use(express.json());
 
 // Add this after the express setup
@@ -216,29 +220,25 @@ app.use(async (req, res, next) => {
     // Get product details from request body
     const { amount, productId, productTitle } = req.body;
 
+
     // Create x402plus middleware dynamically per shop
     const x402Middleware = x402Paywall(
       shopData.walletAddress!,
       {
         'POST /shopify-proxy/api/checkout': {
           network: shopData.acceptedNetwork!,
-          asset: shopData.acceptedToken!,
+          asset: "0x1::aptos_coin::AptosCoin",
           maxAmountRequired: amount || '1000000',
           description: `Purchase: ${productTitle || 'Product'}`,
           mimeType: 'application/json',
-          maxTimeoutSeconds: 600,
-          extra: { 
-            name: 'USDC', 
-            version: '2',
-            productId,
-            productTitle,
-          },
+          maxTimeoutSeconds: 600
         },
       },
       {
         url: process.env.FACILITATOR_URL || 'https://facilitator.stableyard.fi',
       }
     );
+
 
     // x402plus handles everything: 402 response OR verification OR calling next()
     x402Middleware(req, res, next);
@@ -251,7 +251,7 @@ app.use(async (req, res, next) => {
 // This handler ONLY runs if x402plus verification succeeds
 app.post('/shopify-proxy/api/checkout', async (req, res) => {
   const shop = req.query.shop as string || getShopFromProxy(req);
-  const { productId, productTitle, productPrice, amount } = req.body;
+  const { productId, productTitle, productPrice, amount, fromAddress, txHash } = req.body;
 
   console.log('Payment verified by x402plus! Creating order...');
 
@@ -262,22 +262,6 @@ app.post('/shopify-proxy/api/checkout', async (req, res) => {
 
     if (!shopData) {
       return res.status(404).json({ error: 'Shop not found' });
-    }
-
-    // x402plus has already verified payment
-    // Extract payment info from X-PAYMENT-RESPONSE header (set by x402plus)
-    const xPaymentResponse = res.getHeader('X-PAYMENT-RESPONSE') as string;
-    let txHash = 'verified-by-x402plus';
-    let fromAddress = 'verified-wallet';
-
-    if (xPaymentResponse) {
-      try {
-        const paymentData = JSON.parse(xPaymentResponse);
-        txHash = paymentData.txHash || txHash;
-        fromAddress = paymentData.from || fromAddress;
-      } catch (e) {
-        console.log('Could not parse X-PAYMENT-RESPONSE');
-      }
     }
 
     // Store payment record
@@ -325,6 +309,7 @@ app.post('/shopify-proxy/api/checkout', async (req, res) => {
 app.get('/shopify-proxy', async (req, res) => {
   res.sendFile('x402-storefront.html', { root: './public' });
 });
+
 
 // ============================================
 // START SERVER

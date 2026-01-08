@@ -214,7 +214,7 @@
           </button>
         </div>
       </div>
-      <br/>
+      <br />
 
       <!-- <script>
         // Add to existing script section
@@ -239,20 +239,23 @@
 
         <div class="form-group">
           <label>Accepted Token</label>
-          <input type="text" id="acceptedToken" placeholder="0x... (e.g., USDC, USDT)" required>
+          <select id="acceptedToken" required>
+            <option value="">Select Token</option>
+            <option value="0x1::aptos_coin::AptosCoin">MOVE</option>
+            <option value="0x833589fcd6edb6e08f4c7c32d4f71b54bda02913">USDC</option>
+          </select>
         </div>
 
         <div class="form-group">
           <label>Network</label>
           <select id="acceptedNetwork" required>
             <option value="">Select network</option>
-            <option value="ethereum">Ethereum</option>
-            <option value="polygon">Polygon</option>
-            <option value="arbitrum">Arbitrum</option>
-            <option value="optimism">Optimism</option>
+            <option value="movement">Movement</option>
             <option value="base">Base</option>
           </select>
         </div>
+
+
 
         <div class="form-group">
           <label>

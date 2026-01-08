@@ -1,10 +1,12 @@
 # x402 Shopify App
 
+### Bringing Movement Network's Lightning-Fast Payments to 4.4M+ Shopify Stores
+
 ## 🎯 The Problem
-Traditional e-commerce is stuck in Web2. AI agents and crypto-native users can't seamlessly purchase products from Shopify stores.
+Traditional e-commerce is stuck in Web2. AI agents and crypto-native users can't seamlessly purchase products from Shopify stores and Movement Network's speed and efficiency can't reach the millions of merchants on Shopify.
 
 ## ✨ Our Solution
-A Shopify app that bridges Web2 commerce with Web3 payments using the x402 v2 protocol.
+A Shopify app that bridges Web2 commerce with Web3 payments using the x402 v2 protocol on Movement mainnet.
 
 ![x402 Shopify App](./public/images/x402-shopify-admin.png)
 
@@ -23,7 +25,7 @@ A Shopify app that bridges Web2 commerce with Web3 payments using the x402 v2 pr
 3. "Browse real products from the Shopify catalog"
 4. Show: Product grid with actual store products
 5. "Click 'Buy with x402' and connect wallet"
-6. Show: MetaMask connection
+6. Show: Nightly wallet connection
 7. "Review the x402 v2 payment request"
 8. Show: Payment details (protocol, recipient, amount, network)
 9. "Sign the transaction"
@@ -55,6 +57,14 @@ A Shopify app that bridges Web2 commerce with Web3 payments using the x402 v2 pr
 - REST API for product fetching and order creation
 - Real-time payment verification
 - Postgres database for payment tracking
+
+## 🚀 Why Movement Network?
+
+- ⚡ **Sub-second finality** - Orders confirmed instantly
+- 💰 **Fraction-of-a-cent fees** - Merchants keep more revenue
+- 🌐 **Built for scale** - Ready for mainstream adoption
+
+![x402 Shopify App](./public/images/success.png)
 
 ## 🏆 Why This
 1. **Complete Solution**: End-to-end working implementation

@@ -5,11 +5,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pay with x402</title>
-  <!-- x402plus client library -->
-  <!-- <script type="module">
-    import { withX402Fetch, createEvmSigner } from 'https://cdn.jsdelivr.net/npm/x402plus@latest/+esm';
-    window.x402plus = { withX402Fetch, createEvmSigner };
-  </script> -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
     * {
@@ -346,7 +341,7 @@
   <div class="container">
     <div class="header">
       <h1>💎 Pay with x402</h1>
-      <p>Secure crypto payments powered by x402 v2 protocol</p>
+      <p>Secure crypto payments powered by x402 v2 protocol on Movement Network</p>
     </div>
 
     <div id="errorState" class="empty-state hidden">
@@ -393,7 +388,6 @@
 
           <div style="text-align: center; margin-bottom: 20px;">
             <div style="font-size: 20px; font-weight: 600; margin-bottom: 8px;" id="payProductTitle"></div>
-            <!-- <div style="font-size: 32px; font-weight: 700; color: #667eea;" id="payProductPrice"></div> -->
             <div style="font-size: 32px; font-weight: 700; color: #008060;" id="payProductPrice"></div>
           </div>
 
@@ -409,7 +403,7 @@
             </div>
             <div class="payment-row">
               <span class="payment-label">Token</span>
-              <span class="payment-value" id="payToken">USDC</span>
+              <span class="payment-value" id="payToken">MOVE</span>
             </div>
             <div class="payment-row">
               <span class="payment-label">Amount</span>
@@ -417,7 +411,7 @@
             </div>
             <div class="payment-row">
               <span class="payment-label">Network</span>
-              <span class="payment-value" id="payNetwork">...</span>
+              <span class="payment-value" id="payNetwork">Movement</span>
             </div>
           </div>
 
@@ -475,8 +469,29 @@
   </div>
 
   <script type="module">
-    // Import x402plus
-    import { withX402Fetch, createEvmSigner } from 'https://cdn.jsdelivr.net/npm/x402plus@latest/+esm';
+
+    // Inline the Aptos payment module to avoid proxy import issues
+    import {
+      Aptos,
+      AptosConfig,
+      Network,
+      AccountAuthenticatorEd25519,
+      Ed25519PublicKey,
+      Ed25519Signature,
+    } from "https://cdn.jsdelivr.net/npm/@aptos-labs/ts-sdk@latest/+esm";
+
+    import { buildAptosLikePaymentHeader } from "https://cdn.jsdelivr.net/npm/x402plus@latest/+esm";
+
+    const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
+
+    // Convert wallet's {0: byte, 1: byte, ...} object to Uint8Array
+    function toBytes(obj) {
+      if (obj instanceof Uint8Array) return obj;
+      if (Array.isArray(obj)) return new Uint8Array(obj);
+
+      const keys = Object.keys(obj).map(Number).sort((a, b) => a - b);
+      return new Uint8Array(keys.map(k => obj[k]));
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
 
@@ -492,37 +507,111 @@
     console.log('x402plus loaded successfully');
     console.log('API base path:', apiBasePath);
 
-    // Network configurations
-    const NETWORK_CONFIGS = {
-      'base': {
-        chainId: '0x2105',
-        chainName: 'Base',
-        nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
-        rpcUrls: ['https://mainnet.base.org'],
-        blockExplorerUrls: ['https://basescan.org']
-      },
-      'base-sepolia': {
-        chainId: '0x14a34',
-        chainName: 'Base Sepolia',
-        nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
-        rpcUrls: ['https://sepolia.base.org'],
-        blockExplorerUrls: ['https://sepolia.basescan.org']
-      },
-      'ethereum': {
-        chainId: '0x1',
-        chainName: 'Ethereum Mainnet',
-        nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
-        rpcUrls: ['https://eth.llamarpc.com'],
-        blockExplorerUrls: ['https://etherscan.io']
-      },
-      'polygon': {
-        chainId: '0x89',
-        chainName: 'Polygon',
-        nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
-        rpcUrls: ['https://polygon-rpc.com'],
-        blockExplorerUrls: ['https://polygonscan.com']
-      },
-    };
+    // Aptos Payment Manager
+    class AptosPaymentManager {
+      constructor() {
+        this.wallet = null;
+        this.account = null;
+      }
+
+      isWalletInstalled() {
+        return typeof window.nightly.aptos !== 'undefined';
+      }
+
+      async connect() {
+        if (!this.isWalletInstalled()) {
+          throw new Error('Nightly Wallet is not installed. Please install it from https://nightly.app/');
+        }
+
+        try {
+          const response = await window.nightly.aptos.connect();
+          this.account = {
+            address: response.address,
+            publicKey: response.publicKey,
+          };
+          this.wallet = window.nightly.aptos;
+
+          return this.account;
+        } catch (error) {
+          console.error('Failed to connect wallet:', error);
+          throw new Error('Failed to connect to Petra Wallet');
+        }
+      }
+
+      async disconnect() {
+        if (this.wallet) {
+          try {
+            await this.wallet.disconnect();
+          } catch (error) {
+            console.error('Disconnect error:', error);
+          }
+        }
+        this.wallet = null;
+        this.account = null;
+      }
+
+      isConnected() {
+        return this.account !== null;
+      }
+
+      getAccount() {
+        return this.account;
+      }
+
+      getWalletAddress() {
+        return this.account.address;
+      }
+
+      async payForAccess(paymentRequirements) {
+        if (!this.account) {
+          throw new Error('Wallet not connected');
+        }
+
+        try {
+          console.log('Building transfer transaction...', {
+            sender: this.account.address,
+            recipient: paymentRequirements.payTo,
+            amount: paymentRequirements.maxAmountRequired
+          });
+
+          // Build transfer transaction
+          const aptos = new Aptos(new AptosConfig({ network: Network.CUSTOM, fullnode: MOVEMENT_RPC }));
+          const tx = await aptos.transaction.build.simple({
+            sender: this.account.address,
+            data: {
+              function: "0x1::aptos_account::transfer",
+              functionArguments: [
+                paymentRequirements.payTo,
+                paymentRequirements.maxAmountRequired
+              ],
+            },
+          });
+
+          const signed = await this.wallet.signTransaction(tx);
+
+          const pubKeyBytes = toBytes(signed.args.public_key.key.data);
+          const sigBytes = toBytes(signed.args.signature.data.data);
+
+          const authenticator = new AccountAuthenticatorEd25519(
+            new Ed25519PublicKey(pubKeyBytes),
+            new Ed25519Signature(sigBytes)
+          );
+
+          const paymentHeader = buildAptosLikePaymentHeader(paymentRequirements, {
+            signatureBcsBase64: Buffer.from(authenticator.bcsToBytes()).toString("base64"),
+            transactionBcsBase64: Buffer.from(tx.bcsToBytes()).toString("base64"),
+          });
+
+          return paymentHeader;
+
+        } catch (error) {
+          console.error('Payment error:', error);
+          throw new Error(`Payment failed: ${error.message}`);
+        }
+      }
+    }
+
+    const aptosPayment = new AptosPaymentManager();
 
     async function init() {
       let shopFromUrl = urlParams.get('shop');
@@ -550,7 +639,6 @@
         }
 
         shopConfig = configData.config;
-        console.log('Shop config loaded:', shopConfig);
 
         const productsResponse = await fetch(`${apiBasePath}/api/products?shop=${encodeURIComponent(shopFromUrl)}`);
         const productsText = await productsResponse.text();
@@ -612,7 +700,21 @@
       if (!selectedProduct) return;
 
       const usdPrice = parseFloat(selectedProduct.price);
-      const cryptoAmount = Math.floor(usdPrice * 1000000).toString();
+
+      // Get current MOVE token price
+      const responsePrice = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=movement&vs_currencies=usd');
+      const data = await responsePrice.json();
+
+      let movePrice = 0.01 // Fallback price
+      if (data.movement && data.movement.usd) {
+        movePrice = data.movement.usd;
+      }
+
+      // Convert USD to MOVE tokens
+      const moveAmount = usdPrice / movePrice;
+
+      // Convert to octas (1 MOVE = 10^8 octas)
+      const cryptoAmount = Math.floor(moveAmount * 100000000).toString();
 
       paymentRequest = {
         amount: cryptoAmount,
@@ -623,14 +725,13 @@
 
       document.getElementById('payProductTitle').textContent = selectedProduct.title;
       document.getElementById('payProductPrice').textContent = `$${selectedProduct.price}`;
-      document.getElementById('payAmount').textContent = `${usdPrice} USDC`;
+      document.getElementById('payAmount').textContent = `${usdPrice} USD = ${moveAmount} MOVE`;
 
       if (shopConfig) {
         document.getElementById('payRecipient').textContent =
           shopConfig.walletAddress.slice(0, 10) + '...' + shopConfig.walletAddress.slice(-8);
-        const networkConfig = NETWORK_CONFIGS[shopConfig.acceptedNetwork];
-        document.getElementById('payNetwork').textContent = networkConfig?.chainName || shopConfig.acceptedNetwork;
-        document.getElementById('payToken').textContent = 'USDC';
+        document.getElementById('payNetwork').textContent = shopConfig.acceptedNetwork;
+        document.getElementById('payToken').textContent = 'MOVE';
       }
 
       document.getElementById('paymentModal').classList.add('show');
@@ -641,24 +742,23 @@
     };
 
     window.connectWallet = async function () {
-      if (typeof window.ethereum === 'undefined') {
-        const install = confirm('MetaMask required. Install now?');
-        if (install) window.open('https://metamask.io/download/', '_blank');
+      if (!aptosPayment.isWalletInstalled()) {
+        const install = confirm('Nightly Wallet is required. Install now?');
+        if (install) window.open('https://nightly.app/', '_blank');
         return;
       }
 
       try {
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        walletAddress = accounts[0];
-        console.log('Wallet connected:', walletAddress);
+        const account = await aptosPayment.connect();
+        walletAddress = account.address;
 
         document.getElementById('connectedWallet').textContent =
-          walletAddress.slice(0, 10) + '...' + walletAddress.slice(-8);
+          account.address.slice(0, 10) + '...' + account.address.slice(-8);
 
         showPaymentScreen();
       } catch (error) {
         console.error('Wallet error:', error);
-        alert('Failed to connect wallet');
+        alert(error.message);
       }
     };
 
@@ -667,41 +767,10 @@
       document.getElementById('paymentScreen').classList.remove('hidden');
     }
 
-    async function switchToCorrectNetwork() {
-      const networkConfig = NETWORK_CONFIGS[shopConfig.acceptedNetwork];
-      if (!networkConfig) throw new Error(`Network ${shopConfig.acceptedNetwork} not supported`);
-
-      const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
-
-      if (currentChainId.toLowerCase() === networkConfig.chainId.toLowerCase()) {
-        console.log('Already on', networkConfig.chainName);
-        return true;
-      }
-
-      try {
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: networkConfig.chainId }],
-        });
-        console.log('Switched to', networkConfig.chainName);
-        return true;
-      } catch (switchError) {
-        if (switchError.code === 4902) {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [networkConfig],
-          });
-          console.log('Added and switched to', networkConfig.chainName);
-          return true;
-        }
-        throw switchError;
-      }
-    }
-
     window.signPayment = async function () {
       const btn = document.getElementById('payButton');
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span>Switching network...';
+      btn.innerHTML = '<span class="loading"></span>Preparing payment...';
 
       const errorDiv = document.getElementById('paymentError');
       errorDiv.classList.add('hidden');
@@ -709,33 +778,17 @@
       const apiShop = urlParams.get('shop') || window.location.hostname;
 
       try {
-        // Step 1: Switch network
-        await switchToCorrectNetwork();
+        let txHash = '';
+        let fromAddress = '';
 
-        btn.innerHTML = '<span class="loading"></span>Preparing payment...';
-        console.log('Creating EVM signer for REAL transaction...');
+        btn.innerHTML = '<span class="loading"></span>Please sign in Nightly Wallet...';
 
-        // Step 2: Create REAL EVM signer
-        const signer = createEvmSigner(window.ethereum);
-        console.log('EVM signer created');
-
-        // Step 3: Wrap fetch with x402plus
-        const x402Fetch = withX402Fetch(fetch, {
-          signer,
-          prefer: 'exact', // Use exact scheme for EVM
-        });
-
-        btn.innerHTML = '<span class="loading"></span>Please sign in MetaMask...';
-        console.log('Making REAL payment with x402plus...');
-        console.log('Network:', shopConfig.acceptedNetwork);
-        console.log('Token:', shopConfig.acceptedToken);
-        console.log('Amount:', paymentRequest.amount);
-
-        // Step 4: x402plus will submit transaction ON-CHAIN
-
-        const response = await x402Fetch(`${apiBasePath}/api/checkout?shop=${encodeURIComponent(apiShop)}`, {
+        // 1. Get payment requirements
+        const res = await fetch(`${apiBasePath}/api/checkout?shop=${encodeURIComponent(apiShop)}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({
             productId: selectedProduct.id,
             productTitle: selectedProduct.title,
@@ -744,27 +797,52 @@
           }),
         });
 
-        console.log('Response status:', response.status);
+        // Check if payment is required (402 status)
+        if (res.status === 402) {
+          // Extract payment requirements from headers
+          const { accepts } = await res.json();
+          if (!accepts?.[0]) throw new Error("No payment requirements");
 
-        if (!response.ok) {
-          const error = await response.json();
-          console.error('Payment failed:', error);
+          // 2. Sign payment (opens wallet)
+          btn.innerHTML = '<span class="loading"></span>Building payment header...';
+
+          const xPayment = await aptosPayment.payForAccess(accepts[0]);
+
+          btn.innerHTML = '<span class="loading"></span>Submitting payment...';
+
+          // Retry request with payment header
+          const retryResponse = await fetch(`${apiBasePath}/api/checkout?shop=${encodeURIComponent(apiShop)}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-PAYMENT': xPayment
+            },
+            body: JSON.stringify({
+              productId: selectedProduct.id,
+              productTitle: selectedProduct.title,
+              productPrice: selectedProduct.price,
+              amount: paymentRequest.amount,
+              fromAddress: walletAddress,
+              txHash: xPayment,
+            }),
+          });
+
+          if (!retryResponse.ok) {
+            const error = await retryResponse.json();
+            throw new Error(error.error || error.details || 'Payment failed');
+          }
+
+          const result = await retryResponse.json();
+
+          showSuccess(result);
+        } else if (res.ok) {
+          // Direct success without payment required
+          const result = await res.json();
+          showSuccess(result);
+        } else {
+          const error = await res.json();
           throw new Error(error.error || error.details || 'Payment failed');
         }
-
-        const result = await response.json();
-        console.log('Payment successful!', result);
-
-        // Show success
-        document.getElementById('paymentScreen').classList.add('hidden');
-        document.getElementById('successScreen').classList.remove('hidden');
-
-        document.getElementById('successOrderId').textContent = result.order.orderId;
-        document.getElementById('successOrderNumber').textContent = result.order.orderName || result.order.orderNumber;
-        document.getElementById('successProduct').textContent = selectedProduct.title;
-        document.getElementById('successAmount').textContent = `$${selectedProduct.price}`;
-        document.getElementById('successTx').textContent =
-          (result.transaction?.hash || result.paymentId || 'verified').slice(0, 16) + '...';
 
       } catch (error) {
         console.error('Payment error:', error);
@@ -774,6 +852,19 @@
         btn.textContent = 'Sign Payment';
       }
     };
+
+    function showSuccess(result) {
+      // Show success screen
+      document.getElementById('paymentScreen').classList.add('hidden');
+      document.getElementById('successScreen').classList.remove('hidden');
+
+      document.getElementById('successOrderId').textContent = result.order?.orderId || 'N/A';
+      document.getElementById('successOrderNumber').textContent = result.order?.orderName || result.order?.orderNumber || 'N/A';
+      document.getElementById('successProduct').textContent = selectedProduct.title;
+      document.getElementById('successAmount').textContent = `$${selectedProduct.price}`;
+      document.getElementById('successTx').textContent =
+        (result.transaction?.hash || result.paymentId || 'verified').slice(0, 16) + '...';
+    }
 
     window.closeModal = function () {
       document.getElementById('paymentModal').classList.remove('show');
@@ -790,17 +881,21 @@
       }, 300);
     };
 
-    // Auto-connect and init
+    // Auto-connect on load if wallet is available
     window.addEventListener('load', async () => {
-      if (typeof window.ethereum !== 'undefined') {
+      if (aptosPayment.isWalletInstalled()) {
         try {
-          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-          if (accounts.length > 0) {
-            walletAddress = accounts[0];
-            console.log('Wallet already connected:', walletAddress);
+          // Try to check if already connected
+          if (window.nightly.aptos.isConnected && await window.nightly.aptos.isConnected()) {
+            const account = await window.nightly.aptos.account();
+            walletAddress = account.address
+            aptosPayment.account = {
+              address: account.address,
+              publicKey: account.publicKey,
+            };
+            aptosPayment.wallet = window.nightly.aptos;
           }
         } catch (error) {
-          console.log('Wallet not connected');
         }
       }
       init();
