@@ -318,6 +318,11 @@ app.post('/shopify-proxy/api/checkout', async (req, res) => {
 //   res.sendFile('x402-storefront.html', { root: './public' });
 // });
 
+// Health check
+app.get('/health', (req, res) => {
+  res.send('Shopify x402 Payment Bridge is Running...');
+});
+
 app.get('/', async (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
