@@ -41,6 +41,40 @@ A Shopify app that bridges Web2 commerce with Web3 payments using the x402 v2 pr
 
 ![x402 Shopify Storefront](./public/images/storefront.png)
 
+## 🌐 Try the Live Demo
+
+**Live Storefront**: [https://testnow-4.myshopify.com/apps/x402-checkout](https://testnow-4.myshopify.com/apps/x402-checkout)
+
+### 🔐 Important: Test Store Password Protection
+
+This is a Shopify development store, which requires password protection per Shopify's policies. Here's what to expect:
+
+**First Visit:**
+1. You'll see a Shopify password page
+2. Enter password: `ofreil`
+3. Shopify will redirect you to the main store homepage (this is default Shopify behavior)
+4. **Manually navigate back** to: `https://testnow-4.myshopify.com/apps/x402-checkout`
+
+**Subsequent Visits:**
+- You'll go directly to the x402 checkout (password is remembered)
+- Full customer experience as intended
+
+> **Note for Judges**: This password step is a Shopify development store requirement and would NOT exist on a production store. Live Shopify stores (like those of the 4.4M+ merchants) have no password protection and would load the x402 checkout directly on first visit.
+
+### 💳 To Complete a Test Purchase:
+
+1. Browse products from the live Shopify catalog
+2. Click "Buy with x402" on any product
+3. Install [Nightly Wallet](https://nightly.app/) if you don't have it
+4. Connect your wallet
+5. Review the x402 v2 payment request
+6. Sign the transaction on Movement Network
+7. See your order created in real-time!
+
+**What You'll Need:**
+- Nightly Wallet browser extension
+- Small amount of MOVE tokens on Movement Network (for test purchases)
+
 ## 🎨 Key Features to Highlight
 - ✅ One-click Shopify app installation
 - ✅ x402 v2 protocol compliance
