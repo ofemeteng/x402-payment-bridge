@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import path from 'path';
+
 import express from 'express';
 import cors from 'cors';
 import { x402Paywall } from 'x402plus';
@@ -21,7 +23,8 @@ app.use(cors({
 app.use(express.json());
 
 // Add this after the express setup
-app.use(express.static('public'));
+// app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Health check
 // app.get('/', (req, res) => {
@@ -305,14 +308,22 @@ app.post('/shopify-proxy/api/checkout', async (req, res) => {
   }
 });
 
-// Index page
+// // Index page
+// app.get('/', async (req, res) => {
+//   res.sendFile('index.html', { root: './public' });
+// });
+
+// // Storefront HTML page
+// app.get('/shopify-proxy', async (req, res) => {
+//   res.sendFile('x402-storefront.html', { root: './public' });
+// });
+
 app.get('/', async (req, res) => {
-  res.sendFile('index.html', { root: './public' });
+  res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-// Storefront HTML page
 app.get('/shopify-proxy', async (req, res) => {
-  res.sendFile('x402-storefront.html', { root: './public' });
+  res.sendFile(path.join(__dirname, '../public/x402-storefront.html'));
 });
 
 
