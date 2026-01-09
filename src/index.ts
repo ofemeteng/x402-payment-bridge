@@ -24,9 +24,9 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Health check
-app.get('/', (req, res) => {
-  res.send('Shopify x402 Payment Bridge - Running');
-});
+// app.get('/', (req, res) => {
+//   res.send('Shopify x402 Payment Bridge - Running');
+// });
 
 // ============================================
 // SHOPIFY OAUTH ROUTES
@@ -305,7 +305,12 @@ app.post('/shopify-proxy/api/checkout', async (req, res) => {
   }
 });
 
-// HTML page
+// Index page
+app.get('/', async (req, res) => {
+  res.sendFile('index.html', { root: './public' });
+});
+
+// Storefront HTML page
 app.get('/shopify-proxy', async (req, res) => {
   res.sendFile('x402-storefront.html', { root: './public' });
 });
