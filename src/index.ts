@@ -6,16 +6,16 @@ import cors from 'cors';
 import { x402Paywall } from 'x402plus';
 import shopify from './config/shopify';
 import prisma from './config/database';
-// import x402Service from './services/x402Service';
 import shopifyOrderService from './services/shopifyOrderService';
 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || "https://nonintelligently-unaccounted-january.ngrok-free.dev";
 
 // app.use(cors());
 app.use(cors({
-  origin: "https://nonintelligently-unaccounted-january.ngrok-free.dev",
+  origin: HOST,
   exposedHeaders: ["X-PAYMENT"]
 }));
 app.use(express.json());
@@ -317,5 +317,5 @@ app.get('/shopify-proxy', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Shopify x402 Bridge running on port ${PORT}`);
-  console.log(`📍 App URL: ${process.env.HOST}`);
+  console.log(`📍 App URL: ${HOST}`);
 });

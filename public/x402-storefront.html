@@ -696,6 +696,15 @@
 
     // Expose functions to global scope
     window.selectProduct = async function (productId) {
+      // Check wallet when user wants to buy
+      if (typeof window.nightly === 'undefined' || typeof window.nightly.aptos === 'undefined') {
+        const install = confirm('Nightly Wallet is required to complete purchases. Install now?');
+        if (install) {
+          window.open('https://nightly.app/', '_blank');
+        }
+        return;
+      }
+
       selectedProduct = products.find(p => p.id === productId);
       if (!selectedProduct) return;
 
@@ -883,7 +892,7 @@
 
     // Auto-connect on load if wallet is available
     window.addEventListener('load', async () => {
-      if (aptosPayment.isWalletInstalled()) {
+      if (typeof window.nightly !== 'undefined' && typeof window.nightly.aptos !== 'undefined') {
         try {
           // Try to check if already connected
           if (window.nightly.aptos.isConnected && await window.nightly.aptos.isConnected()) {
