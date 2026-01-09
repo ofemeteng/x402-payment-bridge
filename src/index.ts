@@ -13,9 +13,8 @@ import shopifyOrderService from './services/shopifyOrderService';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || "https://nonintelligently-unaccounted-january.ngrok-free.dev";
+const HOST = process.env.HOST || "https://x402-payment-bridge.vercel.app";
 
-// app.use(cors());
 app.use(cors({
   origin: HOST,
   exposedHeaders: ["X-PAYMENT"]
@@ -23,13 +22,7 @@ app.use(cors({
 app.use(express.json());
 
 // Add this after the express setup
-// app.use(express.static('public'));
 app.use(express.static(path.join(__dirname, '../public')));
-
-// Health check
-// app.get('/', (req, res) => {
-//   res.send('Shopify x402 Payment Bridge - Running');
-// });
 
 // ============================================
 // SHOPIFY OAUTH ROUTES
@@ -152,6 +145,48 @@ app.post('/api/config', async (req, res) => {
   } catch (error) {
     console.error('Config update error:', error);
     res.status(500).json({ error: 'Failed to update configuration' });
+  }
+});
+
+app.get('/api/payments', async (req, res) => {
+  const shop = req.query.shop as string;
+
+  if (!shop) {
+    return res.status(400).json({ error: 'Missing shop parameter' });
+  }
+
+  try {
+    // First get the shop to get its ID
+    const shopData = await prisma.shop.findUnique({
+      where: { shopDomain: shop },
+      select: { id: true },
+    });
+
+    if (!shopData) {
+      return res.status(404).json({ error: 'Shop not found', payments: [] });
+    }
+
+    // Fetch payments for this shop, ordered by most recent first
+    const payments = await prisma.payment.findMany({
+      where: { shopId: shopData.id },
+      orderBy: { createdAt: 'desc' },
+      take: 20, // Limit to 20 most recent payments
+      select: {
+        id: true,
+        productTitle: true,
+        amount: true,
+        fromAddress: true,
+        txHash: true,
+        status: true,
+        facilitatorStatus: true,
+        createdAt: true,
+      },
+    });
+
+    res.json({ success: true, payments });
+  } catch (error) {
+    console.error('Payments fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch payments', payments: [] });
   }
 });
 
@@ -307,16 +342,6 @@ app.post('/shopify-proxy/api/checkout', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-// // Index page
-// app.get('/', async (req, res) => {
-//   res.sendFile('index.html', { root: './public' });
-// });
-
-// // Storefront HTML page
-// app.get('/shopify-proxy', async (req, res) => {
-//   res.sendFile('x402-storefront.html', { root: './public' });
-// });
 
 // Health check
 app.get('/health', (req, res) => {
